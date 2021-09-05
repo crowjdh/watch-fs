@@ -1,11 +1,12 @@
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
+from pathlib2 import Path
 import shutil
 import time
 import logging
 import traceback
+import psutil
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -55,17 +56,19 @@ class Handler(FileSystemEventHandler):
     global storage_limit
 
     remaining_disk_space = get_remaining_disk_space(directory_to_watch)
-    message = f"\n- Event: {event.event_type}\n- Target: {event.src_path}\n- Limit | Avail | Remaining: {storage_limit // MEGABYTE} mb | {remaining_disk_space // MEGABYTE} mb | {(remaining_disk_space - storage_limit) // MEGABYTE} mb"
+    message = "\n- Event: {}\n- Target: {}\n- Limit | Avail | Remaining: {} mb | {} mb | {} mb".format(event.event_type, event.src_path, storage_limit // MEGABYTE, remaining_disk_space // MEGABYTE, (remaining_disk_space - storage_limit) // MEGABYTE)
     logger.info(message)
 
     if remaining_disk_space < storage_limit:
       size_to_cleanup = storage_limit - remaining_disk_space
-      logger.warning(f"Not enough storage. Claiming {size_to_cleanup // MEGABYTE} mb to guarantee {storage_limit // GIGABYTE} gb of storage...")
+      logger.warning("Not enough storage. Claiming {} mb to guarantee {} gb of storage...".format(size_to_cleanup // MEGABYTE, storage_limit // GIGABYTE))
       cleanup_old_files(directory_to_watch, size_to_cleanup)
 
 
 def cleanup_old_files(target, size_to_cleanup):
-  paths = sorted(Path(target).rglob('*'), key=os.path.getmtime)
+  paths = Path(target).rglob('*')
+  paths = sorted(paths, key=lambda path: os.path.getmtime(str(path)))
+  paths = filter(lambda path: not path.is_dir(), paths);
 
   collected_file_size = 0
   paths_to_remove = []
@@ -75,7 +78,7 @@ def cleanup_old_files(target, size_to_cleanup):
     size = int(path.stat().st_size)
     collected_file_size += size
 
-    logger.warning(f"\n- Collected: {path}({size // MEGABYTE} mb)\n- Remaining: {(size_to_cleanup - collected_file_size) // MEGABYTE} mb")
+    logger.warning("\n- Collected: {}({} mb)\n- Remaining: {} mb".format(path, size // MEGABYTE, (size_to_cleanup - collected_file_size) // MEGABYTE))
     paths_to_remove.append(path)
 
     if collected_file_size > size_to_cleanup:
@@ -83,24 +86,24 @@ def cleanup_old_files(target, size_to_cleanup):
 
   for path in paths_to_remove:
     size_mb = path.stat().st_size // MEGABYTE
-    logger.warning(f"Removing {path}({size_mb} mb)")
+    logger.warning("Removing {}({} mb)".format(path, size_mb))
 
     global is_dry
     if is_dry:
       continue
 
-    os.remove(path)
+    os.remove(str(path))
 
 
 def get_logger():
   date_str = datetime.today().strftime('%Y-%m-%d')
-  log_file_name = f'./{date_str}.log'
+  log_file_name = './{}.log'.format(date_str)
 
   logging.basicConfig(filename=log_file_name,
                       format='%(asctime)s %(message)s',
                       filemode='a')
 
-  logger = logging.getLogger()
+  logger = logging.getLogger('watch-fs')
   logger.setLevel(logging.INFO)
 
   return logger
@@ -108,7 +111,7 @@ def get_logger():
 
 def parse_args():
   if len(sys.argv) < 3:
-    print(f"Usage: {sys.argv[0]} PATH LIMIT [test]")
+    print("Usage: {} PATH LIMIT [test]".format(sys.argv[0]))
     exit()
 
   args = list(sys.argv)
@@ -122,9 +125,9 @@ def parse_args():
 
 
 def get_remaining_disk_space(target='/'):
-  usage = shutil.disk_usage(target)
+  disk_usage = psutil.disk_usage(target)
 
-  return usage.free
+  return disk_usage.free
 
 
 def main():
