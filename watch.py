@@ -85,6 +85,10 @@ def cleanup_old_files(target, size_to_cleanup):
     size_mb = path.stat().st_size // MEGABYTE
     logger.warning(f"Removing {path}({size_mb} mb)")
 
+    global is_dry
+    if is_dry:
+      continue
+
     os.remove(path)
 
 
@@ -104,11 +108,17 @@ def get_logger():
 
 def parse_args():
   if len(sys.argv) < 3:
-    print(f"Usage: {sys.argv[0]} PATH LIMIT")
+    print(f"Usage: {sys.argv[0]} PATH LIMIT [test]")
     exit()
 
-  [_, path, storage_limit] = sys.argv
-  return { "path": path, "storage_limit": storage_limit }
+  args = list(sys.argv)
+  if len(args) < 4:
+    args += [False]
+  else:
+    args[3] = True
+
+  [_, path, storage_limit, is_dry] = args
+  return { "path": path, "storage_limit": storage_limit, "is_dry": is_dry }
 
 
 def get_remaining_disk_space(target='/'):
@@ -122,6 +132,9 @@ def main():
 
   global directory_to_watch
   directory_to_watch = args['path']
+  global is_dry
+  is_dry = args['is_dry']
+
   global storage_limit
   storage_limit = int(args['storage_limit']) * GIGABYTE
 
