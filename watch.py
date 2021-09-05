@@ -26,7 +26,7 @@ class Watcher:
     logger = get_logger()
 
     global directory_to_watch
-    self.observer.schedule(event_handler, directory_to_watch, recursive=False)
+    self.observer.schedule(event_handler, directory_to_watch, recursive=True)
     self.observer.start()
 
     try:
@@ -55,7 +55,7 @@ class Handler(FileSystemEventHandler):
     global storage_limit
 
     remaining_disk_space = get_remaining_disk_space(directory_to_watch)
-    message = f"\n- Event: {event.event_type}\n- Target: {event.src_path}\n- Limit / Avail: {storage_limit // MEGABYTE} mb / {remaining_disk_space // MEGABYTE} mb"
+    message = f"\n- Event: {event.event_type}\n- Target: {event.src_path}\n- Limit | Avail | Remaining: {storage_limit // MEGABYTE} mb | {remaining_disk_space // MEGABYTE} mb | {(remaining_disk_space - storage_limit) // MEGABYTE} mb"
     logger.info(message)
 
     if remaining_disk_space < storage_limit:
@@ -65,7 +65,8 @@ class Handler(FileSystemEventHandler):
 
 
 def cleanup_old_files(target, size_to_cleanup):
-  paths = sorted(Path(target).iterdir(), key=os.path.getmtime)
+  paths = sorted(Path(target).rglob('*'), key=os.path.getmtime)
+
   collected_file_size = 0
   paths_to_remove = []
   logger = get_logger()
