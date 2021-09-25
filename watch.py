@@ -73,13 +73,16 @@ def cleanup_old_files(target, size_to_cleanup):
 
   for path in paths:
     size = int(path.stat().st_size)
+    if os.path.isdir(path):
+      continue
+
     collected_file_size += size
 
     logger.warning(f"\n- Collected: {path}({size // MEGABYTE} mb)\n- Remaining: {(size_to_cleanup - collected_file_size) // MEGABYTE} mb")
     paths_to_remove.append(path)
 
     if collected_file_size > size_to_cleanup:
-      break;
+      break
 
   for path in paths_to_remove:
     size_mb = path.stat().st_size // MEGABYTE
