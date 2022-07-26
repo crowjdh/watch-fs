@@ -1,10 +1,11 @@
 import os
 import sys
-from datetime import datetime
+import datetime
 from pathlib import Path
 import shutil
 import time
 import logging
+from logging import handlers
 import traceback
 
 from watchdog.observers import Observer
@@ -13,6 +14,8 @@ from watchdog.events import FileSystemEventHandler
 
 MEGABYTE = 1024 ** 2
 GIGABYTE = 1024 ** 3
+
+logger = None
 
 
 class Watcher:
@@ -23,7 +26,6 @@ class Watcher:
 
   def run(self):
     event_handler = Handler()
-    logger = get_logger()
 
     global directory_to_watch
     self.observer.schedule(event_handler, directory_to_watch, recursive=True)
@@ -48,8 +50,8 @@ class Handler(FileSystemEventHandler):
   def on_any_event(event):
     if event.is_directory:
       return None
-
-    logger = get_logger()
+    elif event.event_type == 'modified':
+      return None
 
     global directory_to_watch
     global storage_limit
@@ -69,7 +71,6 @@ def cleanup_old_files(target, size_to_cleanup):
 
   collected_file_size = 0
   paths_to_remove = []
-  logger = get_logger()
 
   for path in paths:
     size = int(path.stat().st_size)
@@ -96,15 +97,22 @@ def cleanup_old_files(target, size_to_cleanup):
 
 
 def get_logger():
-  date_str = datetime.today().strftime('%Y-%m-%d')
+  date_str = datetime.datetime.today().strftime('%Y-%m-%d')
   log_file_name = f'./{date_str}.log'
 
-  logging.basicConfig(filename=log_file_name,
-                      format='%(asctime)s %(message)s',
+  log_format='%(asctime)s %(message)s'
+  logging.basicConfig(
+                      # filename=log_file_name,
+                      format=log_format,
                       filemode='a')
 
   logger = logging.getLogger()
   logger.setLevel(logging.INFO)
+
+  formatter = logging.Formatter(log_format)
+  handler = handlers.TimedRotatingFileHandler(log_file_name, when='midnight')
+  handler.setFormatter(formatter)
+  logger.addHandler(handler)
 
   return logger
 
@@ -146,4 +154,5 @@ def main():
 
 
 if __name__ == '__main__':
+  logger = get_logger()
   main()
